@@ -1,0 +1,1057 @@
+---
+title: "Analysis of the 8 sample anallysed during my master thesis"
+output: html_document
+date: "2024-06-22"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("~/OneDrive - UCL/Doctorat/Thèse/Data Treatement/ToF-SIMS Treatement/Master Thesis Work")
+library(tidyverse)
+library(readr)
+library(FactoMineR)
+library(factoextra)
+library(stringr)
+library(ggrepel)
+library(ggpubr)
+library(rstatix)
+library(upstartr)
+library(latex2exp)
+
+
+theme_set(theme_bw() + 
+            theme(axis.text=element_text(size=12, colour="black"),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=14),
+        axis.text.x=element_text(size=13,face="bold"),
+        strip.text.x = element_text(size=13,face="bold")))
+
+```
+
+# Data Importation
+```{r}
+# DF 1 : DONE WITH my C++ NNLS_admm FUNCTION
+# DF 2 : DONE WITH SCIPY NNLS FUNCTION 
+# DF 3 : DONE WITH SCIPY NNLS FUNCTION imax = molmax = 5
+automatic_positive_df <- read.csv("8sample_automatic_positive_data.csv")
+automatic_positive_df$replicat <- as.factor(automatic_positive_df$replicat)
+automatic_positive_df$sample <- factor(automatic_positive_df$sample_name,
+                                       levels = c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir",
+                                                  "Ru-Rh", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir",
+                                                  "Ru-Pt-Pd-Ir-Rh", "HEA19", "HEA_1.2"))
+metadata_positive <- automatic_positive_df %>% select(!where(is.numeric))
+
+# Scaling the spectra by their total counts
+automatic_positive_df <- automatic_positive_df %>% 
+  mutate("total_count" = rowSums(across(where(is.numeric))))
+
+scaled_automatic_positive_df <- automatic_positive_df %>% mutate(across(where(is.numeric) &!total_count,  ~ .x/total_count))
+
+automatic_negative_df <- read.csv("8sample_automatic_negative_data.csv")
+automatic_negative_df$replicat <- as.factor(automatic_negative_df$replicat)
+automatic_negative_df$sample <- factor(automatic_negative_df$sample_name,
+                                       levels = c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir",
+                                                  "Ru-Rh", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir",
+                                                  "Ru-Pt-Pd-Ir-Rh", "HEA19", "HEA_1.2"))
+metadata_negative <- automatic_negative_df %>% select(!where(is.numeric))
+
+# Scaling the spectra by their total counts
+automatic_negative_df <- automatic_negative_df %>% 
+  mutate("total_count" = rowSums(across(where(is.numeric))))
+
+scaled_automatic_negative_df <- automatic_negative_df %>% mutate(across(where(is.numeric) &!total_count,  ~ .x/total_count))
+```
+
+# PCA Anlaysis on the Ru-Pt-Pd-Ir sample with all 4 primary ions
+```{r}
+PCA_df <- scaled_automatic_positive_df %>% 
+  subset(sample == "Ru-Pt-Pd-Ir") %>% select(where(~ !all(. == 0)))
+
+# Function to categorize variables
+categorize_variable <- function(var_name) {
+  num_elements <- str_count(var_name, pattern = "(Ru|Pd|Pt|Ir|Rh)")  # Count the number of elements
+  if (num_elements == 4) {
+    return("4 Metal Cluster")
+  } else if (num_elements == 3) {
+    return("3 Metal Cluster")
+  } else if (num_elements == 2) {
+    return("2 Metal Cluster")
+  } else if (num_elements == 1) {
+    return("1 Metal Cluster")
+  } else {
+    return("Other")
+  }
+}
+
+# Apply categorization to the variable names
+variable_categories <- PCA_df %>% select(where(is.numeric) & !total_count) %>% 
+  colnames() %>% 
+  map_chr(categorize_variable)
+
+PCA_result <- PCA_df %>% 
+  select(where(is.numeric) & !total_count) %>% 
+  PCA(scale.unit = T, ncp = 4, graph = F)
+
+
+fviz_pca_ind(PCA_result,
+             axes = c(1, 2),
+             geom.ind = "point", # Show points only (no text)
+             col.ind = PCA_df$primary_ion, # Color by sample
+             palette = "jco", 
+             addEllipses = TRUE, 
+             legend.title = "Sample")
+
+# Extract variable loadings and contributions
+var_loadings <- as.data.frame(PCA_result$var$coord)
+var_loadings$variable <- rownames(var_loadings)
+var_loadings$contrib <- PCA_result$var$contrib[, 1] + PCA_result$var$contrib[, 2]  # Contribution of PC1 + PC2
+var_loadings$category <- variable_categories
+var_loadings$cluster <- rownames(var_loadings)
+var_loadings$emph <- var_loadings$Dim.1 < -0.55
+var_loadings$emph <- var_loadings$emph | var_loadings$cluster %in% c("Ru2PtPd3","Ru3PtPd3", "Pt2", "Pt3", "Pt2Pd", "Pt3Pd", "RuPtPd3Ir3")
+
+
+# Extract individual scores
+ind_scores <- as.data.frame(PCA_result$ind$coord)
+ind_scores$primary_ion <- PCA_df$primary_ion 
+
+
+
+
+# Plot with ggplot2
+ggplot(var_loadings, aes(x = Dim.1, y = Dim.2, color = category, label =cluster )) +
+  geom_point(size = 3) +
+  geom_text_repel(data = subset(var_loadings, emph),
+                  size = 7,
+                  max.overlaps = 10,
+                  box.padding = 0.3,
+                  force = 50,
+                  seed = 1,
+                  direction = "both",
+                  aes(color = category)) +
+  guides(color = guide_legend(override.aes = list(size = 5), ncol = 3 , bycol = TRUE)) + 
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.4) +
+  scale_color_manual(values = c("4 Metal Cluster" = "#005f73",
+                                "3 Metal Cluster" = "#00AFBB",
+                                "2 Metal Cluster" = "#E7B800",
+                                "1 Metal Cluster" = "#FC4E07",
+                                "Other" = "grey")) +
+  labs(x = paste0("PC 1 (", round(PCA_result$eig[1, 2], 1), "%)"),
+       y = paste0("PC 2 (", round(PCA_result$eig[2, 2], 1), "%)"),
+       color = "Category",) +
+  theme_bw() +
+  theme(legend.position = "top", 
+        panel.grid = element_blank(),
+        legend.text = element_text(size=30),
+        legend.title = element_blank(),
+        legend.spacing.x = unit(0.5, 'cm'),
+        axis.title = element_text(size=25), 
+        axis.text = element_text(size=20),
+        panel.border = element_rect(color = "#666666")) 
+
+# Plot individual scores with ggplot2
+ggplot(ind_scores, aes(x = Dim.1, y = Dim.2, color = primary_ion)) +
+  geom_point(size = 5) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", size = 0.4) +
+  #scale_color_manual(values = c("sample1_color", "sample2_color", "sample3_color")) +
+  labs(x = paste0("PC 1 (", round(PCA_result$eig[1, 2], 1), "%)"),
+       y = paste0("PC 2 (", round(PCA_result$eig[2], 2), "%)"),
+       color = "Primary Ions") +
+  theme_bw()+
+  theme(legend.position = "top", 
+        panel.grid = element_blank(),
+        legend.text = element_text(size=30),
+        legend.title = element_blank(),
+        axis.title = element_text(size=25), 
+        axis.text = element_text(size=20),
+        panel.border = element_rect(color = "#666666"))
+```
+
+
+# PCA Analysis with automatic molecules identification with Bi5
+## On molecules that are quantified at least one time in one sample
+```{r}
+#### POSITIVE ####
+PCA_df = scaled_automatic_positive_df %>% 
+  subset(primary_ion== "Bi5")
+
+pca_result <- PCA_df %>%
+  select(where(is.numeric) & !total_count & !Na) %>%  
+  PCA(scale.unit = T, ncp = 4, graph = F)
+
+fviz_pca_var(pca_result,
+             axes = c(1, 2),
+             col.var = "contrib", # Color by contributions to the PC
+             geom.var = c("point", "text"),
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = F) # Avoid text overlapping
+
+
+fviz_pca_ind(pca_result,
+             axes = c(1, 2),
+             geom.ind = "point", # Show points only (no text)
+             col.ind = PCA_df$sample, # Color by sample
+             palette = "jco", 
+             #addEllipses = TRUE, 
+             legend.title = "Sample")
+
+
+
+##### NEGATIVE #####
+pca_result <- scaled_automatic_negative_df %>% 
+  select(where(is.numeric) & !total_count) %>% 
+  scale() %>% 
+  PCA(scale.unit = F, ncp = 4, graph = F)
+
+fviz_pca_var(pca_result,
+             axes = c(1, 2),
+             col.var = "contrib", # Color by contributions to the PC
+             geom.var = c("point", "text"),
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = F) # Avoid text overlapping
+
+
+fviz_pca_ind(pca_result,
+             axes = c(1, 2),
+             geom.ind = "point", # Show points only (no text)
+             col.ind = metadata_negative$sample, # Color by sample
+             palette = "jco", 
+             addEllipses = F, 
+             legend.title = "Sample")
+```
+
+## On molecules that have been quantify on all samples
+
+```{r}
+#### POSITIVE ####
+PCA_df <- scaled_automatic_positive_df %>% 
+  subset(primary_ion == "Bi5")
+
+pca_result <- PCA_df %>% 
+  select(where(~ all(. != 0))) %>% # <---- to select molecules quantify on every sample
+  select(where(is.numeric)&  !total_count & !Na) %>% 
+  PCA(scale.unit = T, ncp = 4, graph = F)
+  
+fviz_pca_var(pca_result,
+             axes = c(1, 2),
+             col.var = "contrib", # Color by contributions to the PC
+             geom.var = c("point", "text"),
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = F) # Avoid text overlapping
+
+
+fviz_pca_ind(pca_result,
+             axes = c(1, 2),
+             geom.ind = "point", # Show points only (no text)
+             col.ind = PCA_df$sample, # Color by sample
+             palette = "jco", 
+             addEllipses = F, 
+             legend.title = "Sample")
+
+#### NEGATIVE ####
+pca_result <- scaled_automatic_negative_df %>% 
+  select(where(~ all(. != 0))) %>% 
+  select(where(is.numeric)&  !total_count) %>% 
+  scale() %>% 
+  PCA(scale.unit = F, ncp = 4, graph = F)
+  
+fviz_pca_var(pca_result,
+             axes = c(1, 2),
+             col.var = "contrib", # Color by contributions to the PC
+             geom.var = c("point", "text"),
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = F) # Avoid text overlapping
+
+
+fviz_pca_ind(pca_result,
+             axes = c(1, 2),
+             geom.ind = "point", # Show points only (no text)
+             col.ind = metadata_negative$sample, # Color by sample
+             palette = "jco", 
+             addEllipses = T, 
+             legend.title = "Sample")
+```
+
+# Cluster Ratio
+## Cluster Ratio with all metals
+```{r}
+str_all_primary_ion <- "^(Pt|Pd|Ru|Ir|Rh){1}$"
+
+scaled_automatic_positive_df %>% select((matches("^(Ru\\d?|Pd\\d?|Pt\\d?){2,}$")))  %>% colnames()
+
+sample_names <- c("Ru" = "Ru", "Ru-Pt" = "Ru-Pt", "Ru-Pd" = "Ru-Pd",
+                  "Ru-Ir" = "Ru-Ir","Ru-Rh" = "Ru-Rh",
+                  "Ru-Pt-Pd" = "Ru-Pt-Pd", 
+                  "Ru-Pt-Pd-Ir" = "Ru-Pt-Pd-Ir", 
+                  "Ru-Pt-Pd-Ir-Rh" = "HEA Mix", 
+                  "HEA19" = "HEA Seg")
+
+anova_df <- scaled_automatic_positive_df %>% 
+  subset(sample %in% c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir", "Ru-Rh",
+                      "Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>% 
+  mutate(HACS = rowSums(across(matches("^(Ru\\d?|Pd\\d?|Pt\\d?|Rh\\d?|Ir\\d?){2,}$"))),
+         IACS = rowSums(across(matches("^(Pd\\d|Pt\\d|Ru\\d|Rh\\d|Ir\\d){1}$")))) %>% 
+  select(sample, primary_ion, replicat, HACS, IACS, matches(str_all_primary_ion)) %>% 
+  mutate(HACR = HACS/rowSums(across(matches(str_all_primary_ion))), 
+         IACR = IACS/rowSums(across(matches(str_all_primary_ion)))) %>%
+  mutate(CR = HACR/IACR) 
+
+# Extracting the CR for each sample in a Df
+CR_df <- anova_df %>% select(sample, primary_ion, replicat, CR)
+  
+# Selection of Bi5 and computing of the SE intra sample
+  anova_df <- anova_df %>% 
+  select(!replicat) %>% 
+  subset(primary_ion == "Bi5") %>% 
+  group_by(sample) %>% 
+  mutate(SE_CR = sd(CR)/sqrt(n()), mean_CR = mean(CR)) %>% 
+  select(sample, primary_ion, CR, SE_CR, mean_CR) 
+  #pivot_longer(!c(sample, primary_ion)) 
+
+p <- anova_df %>% 
+  ggplot(aes(x = 1,  y = CR, color = sample)) + 
+  geom_point(size = 6) + 
+  scale_color_manual(values = c("#e55e57", "#e5a273", "#ffd479", "#3bc093", "#07b5bc" ,
+                                 "#509bdd", "#8d85e5", "#b373d0", "#D452AA")) +
+  stat_summary(geom = "point",fun = "mean", size = 7, fill = "red", color = "red",
+              shape = 23) +
+  facet_grid(~sample, switch = "x", scales = "free", labeller = labeller(sample = sample_names)) +
+  scale_x_continuous(expand = c(0, 0.55))+
+  geom_errorbar(aes(group = sample, ymin = mean_CR- 1.96*SE_CR, ymax = mean_CR + 1.96*SE_CR),
+                color = "black", width = 0.3) +
+  ylab("Cluster Ratio") +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size=30, color = "black"),
+        axis.title.y=element_text(size=30),
+        axis.title.x= element_blank(),
+        strip.text.y = element_blank(),
+        strip.text.x = element_text(size=25,face="bold"),
+        panel.border = element_rect(color = "#666666"),
+        plot.background = element_rect(fill='transparent', color=NA),
+        panel.background = element_rect(fill='transparent'))
+
+# Define the color palette for the samples
+sample_colors <- c("Ru" = "#e55e57" ,"Ru-Pt" = "#e5a273", "Ru-Pd" = "#ffd479",
+                   "Ru-Ir" = "#3bc093", "Ru-Rh" = "#07b5bc", 
+                   "Ru-Pt-Pd" = "#509bdd", "Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "Ru-Pt-Pd-Ir-Rh" = "#b373d0", "HEA19" = "#D452AA")
+
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-b', g$layout$name))
+  fills <- sample_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+
+# Fit the model using aov
+model <- lm(CR ~ sample, data = anova_df)
+
+#ggqqplot(residuals(model))
+
+# Calculer le test de normalité de Shapiro-Wilk
+shapiro_test(residuals(model)) 
+#pval>0.05 -> pas significatif -> anormalité des donnée pas prouvée
+
+# Vérifier l’hypothèse de normalité par groupe
+anova_df %>% subset(sample != "Ru") %>% 
+  group_by(sample) %>%
+  shapiro_test(CR)
+#pval>0.05 -> pas significatif -> anormalité des donnée pas prouvée
+
+
+#L’hypothèse d’homogénéité des variances
+#plot(model,1)
+anova_df %>% levene_test(CR ~ sample)
+# #pval>0.05 -> pas significatif -> inhomogénéité des variance pas prouvée
+
+#Anova test
+res.aov <- anova_df %>% anova_test(CR ~ sample)
+res.aov
+
+# Pair wise comparaison
+# Comparaisons par paires
+pwc <- anova_df %>% tukey_hsd(CR ~ sample)
+pwc
+pairwise.t.test(anova_df$CR, anova_df$sample, p.adjust.method = "bonferroni")
+```
+
+## Cluster Ratio with only Pt and Pd
+```{r}
+str_primary_ion <- "^(Pt|Pd){1}$"
+
+scaled_automatic_positive_df %>% select((matches("^(Pd\\d?|Pt\\d?){2,}$")))  %>% colnames()
+
+sample_names <- c("Ru-Pt-Pd" = "Ru-Pt-Pd", 
+                  "Ru-Pt-Pd-Ir" = "Ru-Pt-Pd-Ir", 
+                  "Ru-Pt-Pd-Ir-Rh" = "HEA Mix", 
+                  "HEA19" = "HEA Seg")
+
+anova_df <- scaled_automatic_positive_df %>% 
+  subset(sample %in% c("Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>% 
+  mutate(HACS = rowSums(across(matches("^(Pd\\d?|Pt\\d?){2,}$"))),
+         IACS = rowSums(across(matches("^(Pd\\d|Pt\\d){1}$")))) %>% 
+  select(sample, primary_ion, replicat, HACS, IACS, matches(str_primary_ion)) %>% 
+  mutate(HACR = HACS/rowSums(across(matches(str_primary_ion))), 
+         IACR = IACS/rowSums(across(matches(str_primary_ion)))) %>%
+  mutate(CR = HACR/IACR) 
+
+# Extracting the CR for each sample in a Df
+CR_df <- anova_df %>% select(sample, primary_ion, replicat, CR)
+  
+# Selection of Bi5 and computing of the SE intra sample
+  anova_df <- anova_df %>% 
+  select(!replicat) %>% 
+  subset(primary_ion == "Bi5") %>% 
+  group_by(sample) %>% 
+  mutate(SE_CR = sd(CR)/sqrt(n()), mean_CR = mean(CR)) %>% 
+  select(sample, primary_ion, CR, SE_CR, mean_CR) 
+  #pivot_longer(!c(sample, primary_ion)) 
+
+p <- anova_df %>% 
+  ggplot(aes(x = 1,  y = CR, color = sample)) + 
+  geom_point(size = 6) + 
+  scale_color_manual(values = c("#509bdd", "#8d85e5", "#b373d0", "#D452AA")) +
+  stat_summary(geom = "point",fun = "mean", size = 7, fill = "red", color = "red",
+              shape = 23) +
+  facet_grid(~sample, switch = "x", scales = "free", labeller = labeller(sample = sample_names)) +
+  scale_x_continuous(expand = c(0, 0.55))+
+  geom_errorbar(aes(group = sample, ymin = mean_CR- 1.96*SE_CR, ymax = mean_CR + 1.96*SE_CR),
+                color = "black", width = 0.3) +
+  ylab("Cluster Ratio") +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size=30, color = "black"),
+        axis.title.y=element_text(size=30),
+        axis.title.x= element_blank(),
+        strip.text.y = element_blank(),
+        strip.text.x = element_text(size=25,face="bold"),
+        panel.border = element_rect(color = "#666666"),
+        plot.background = element_rect(fill='transparent', color=NA),
+        panel.background = element_rect(fill='transparent'))
+
+# Define the color palette for the samples
+sample_colors <- c("Ru-Pt-Pd" = "#509bdd", "Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "Ru-Pt-Pd-Ir-Rh" = "#b373d0", "HEA19" = "#D452AA")
+
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-b', g$layout$name))
+  fills <- sample_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+
+
+# Pair wise comparaison
+# Comparaisons par paires
+pairwise.t.test(anova_df$CR, anova_df$sample, p.adjust.method = "bonferroni")
+```
+
+## Cluster Ratio with Pt Pd Ir
+```{r}
+str_primary_ion <- "^(Pt|Pd){1}$"
+
+scaled_automatic_positive_df %>% select((matches("^(Pd\\d|Pt\\d|Ir\\d){1}$")))  %>% colnames()
+
+sample_names <- c("Ru-Pt-Pd-Ir" = "Ru-Pt-Pd-Ir", 
+                  "Ru-Pt-Pd-Ir-Rh" = "HEA Mix", 
+                  "HEA19" = "HEA Seg")
+
+anova_df <- scaled_automatic_positive_df %>% 
+  subset(sample %in% c("Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>% 
+  mutate(HACS = rowSums(across(matches("^(Pd\\d?|Pt\\d?|Ir\\d?){2,}$"))),
+         IACS = rowSums(across(matches("^(Pd\\d|Pt\\d|Ir\\d){1}$")))) %>% 
+  select(sample, primary_ion, replicat, HACS, IACS, matches(str_primary_ion)) %>% 
+  mutate(HACR = HACS/rowSums(across(matches(str_primary_ion))), 
+         IACR = IACS/rowSums(across(matches(str_primary_ion)))) %>%
+  mutate(CR = HACR/IACR) 
+
+# Extracting the CR for each sample in a Df
+CR_df <- anova_df %>% select(sample, primary_ion, replicat, CR)
+  
+# Selection of Bi5 and computing of the SE intra sample
+  anova_df <- anova_df %>% 
+  select(!replicat) %>% 
+  subset(primary_ion == "Bi5") %>% 
+  group_by(sample) %>% 
+  mutate(SE_CR = sd(CR)/sqrt(n()), mean_CR = mean(CR)) %>% 
+  select(sample, primary_ion, CR, SE_CR, mean_CR) 
+  #pivot_longer(!c(sample, primary_ion)) 
+
+p <- anova_df %>% 
+  ggplot(aes(x = 1,  y = CR, color = sample)) + 
+  geom_point(size = 6) + 
+  scale_color_manual(values = c("#8d85e5", "#b373d0", "#D452AA")) +
+  stat_summary(geom = "point",fun = "mean", size = 7, fill = "red", color = "red",
+              shape = 23) +
+  facet_grid(~sample, switch = "x", scales = "free", labeller = labeller(sample = sample_names)) +
+  scale_x_continuous(expand = c(0, 0.55))+
+  geom_errorbar(aes(group = sample, ymin = mean_CR- 1.96*SE_CR, ymax = mean_CR + 1.96*SE_CR),
+                color = "black", width = 0.3) +
+  ylab("Cluster Ratio") +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size=30, color = "black"),
+        axis.title.y=element_text(size=30),
+        axis.title.x= element_blank(),
+        strip.text.y = element_blank(),
+        strip.text.x = element_text(size=25,face="bold"),
+        panel.border = element_rect(color = "#666666"),
+        plot.background = element_rect(fill='transparent', color=NA),
+        panel.background = element_rect(fill='transparent'))
+
+# Define the color palette for the samples
+sample_colors <- c("Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "Ru-Pt-Pd-Ir-Rh" = "#b373d0", "HEA19" = "#D452AA")
+
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-b', g$layout$name))
+  fills <- sample_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+
+
+# Pair wise comparaison
+# Comparaisons par paires
+pairwise.t.test(anova_df$CR, anova_df$sample, p.adjust.method = "bonferroni")
+```
+
+## Cluster Ratio with Pt Pd Ir Rh
+```{r}
+str_primary_ion <- "^(Pt|Pd){1}$"
+
+scaled_automatic_positive_df %>% select((matches("^(Pd\\d|Pt\\d|Ir\\d|Rh\\d){1}$")))  %>% colnames()
+
+sample_names <- c("Ru-Pt-Pd-Ir" = "Ru-Pt-Pd-Ir", 
+                  "Ru-Pt-Pd-Ir-Rh" = "HEA Mix", 
+                  "HEA19" = "HEA Seg")
+
+anova_df <- scaled_automatic_positive_df %>% 
+  subset(sample %in% c("Ru-Pt-Pd-Ir-Rh", "HEA19")) %>% 
+  mutate(HACS = rowSums(across(matches("^(Pd\\d?|Pt\\d?|Ir\\d?|Rh\\d?){2,}$"))),
+         IACS = rowSums(across(matches("^(Pd\\d|Pt\\d|Ir\\d|Rh\\d){1}$")))) %>% 
+  select(sample, primary_ion, replicat, HACS, IACS, matches(str_primary_ion)) %>% 
+  mutate(HACR = HACS/rowSums(across(matches(str_primary_ion))), 
+         IACR = IACS/rowSums(across(matches(str_primary_ion)))) %>%
+  mutate(CR = HACR/IACR) 
+
+# Extracting the CR for each sample in a Df
+CR_df <- anova_df %>% select(sample, primary_ion, replicat, CR)
+  
+# Selection of Bi5 and computing of the SE intra sample
+  anova_df <- anova_df %>% 
+  select(!replicat) %>% 
+  subset(primary_ion == "Bi5") %>% 
+  group_by(sample) %>% 
+  mutate(SE_CR = sd(CR)/sqrt(n()), mean_CR = mean(CR)) %>% 
+  select(sample, primary_ion, CR, SE_CR, mean_CR) 
+  #pivot_longer(!c(sample, primary_ion)) 
+
+p <- anova_df %>% 
+  ggplot(aes(x = 1,  y = CR, color = sample)) + 
+  geom_point(size = 6) + 
+  scale_color_manual(values = c("#b373d0", "#D452AA")) +
+  stat_summary(geom = "point",fun = "mean", size = 7, fill = "red", color = "red",
+              shape = 23) +
+  facet_grid(~sample, switch = "x", scales = "free", labeller = labeller(sample = sample_names)) +
+  scale_x_continuous(expand = c(0, 0.55))+
+  geom_errorbar(aes(group = sample, ymin = mean_CR- 1.96*SE_CR, ymax = mean_CR + 1.96*SE_CR),
+                color = "black", width = 0.3) +
+  ylab("Cluster Ratio") +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size=30, color = "black"),
+        axis.title.y=element_text(size=30),
+        axis.title.x= element_blank(),
+        strip.text.y = element_blank(),
+        strip.text.x = element_text(size=25,face="bold"),
+        panel.border = element_rect(color = "#666666"),
+        plot.background = element_rect(fill='transparent', color=NA),
+        panel.background = element_rect(fill='transparent'))
+
+# Define the color palette for the samples
+sample_colors <- c("Ru-Pt-Pd-Ir-Rh" = "#b373d0", "HEA19" = "#D452AA")
+
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-b', g$layout$name))
+  fills <- sample_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+
+
+# Pair wise comparaison
+# Comparaisons par paires
+pairwise.t.test(anova_df$CR, anova_df$sample, p.adjust.method = "bonferroni")
+```
+
+# Oxidation Ratio
+```{r}
+str_all_primary_ion <- "^(Pt|Pd|Ru|Ir|Rh){1}$"
+automatic_negative_df %>% select(matches("^(Pt|Pd|Ru|Ir|Rh){1}$")) %>% colnames()
+
+oxide_df <- scaled_automatic_negative_df %>% mutate(
+                        RuO_sum = rowSums(across(matches("RuO\\d?"))),
+                        IrO_sum = rowSums(across(matches("IrO\\d?"))),
+                        PdO_sum = rowSums(across(matches("PdO\\d?"))),
+                        PtO_sum = rowSums(across(matches("PtO\\d?"))),
+                        RhO_sum = rowSums(across(matches("RhO\\d?"))),) %>% 
+  #mutate(allOxide_sum = rowSums(across(contains("sum")))) %>% 
+  mutate(across(c(contains("sum")), ~ .x/rowSums(across(matches(str_all_primary_ion))), # rowSums(across(matches(str_primary_ion))) 
+                .names = "{gsub('_sum$', '_ratio', .col)}")) %>% 
+  select(sample , primary_ion, replicat, contains("ratio"), contains("sum")) %>% 
+  pivot_longer(!c(sample, primary_ion, replicat) , names_to = c("oxides", "metric"),
+                         values_to = "value", names_sep = "_") %>% 
+  subset(metric == "ratio" 
+         & sample %in% c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir", "Ru-Rh", "Ru-Pt-Pd",
+                         "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) 
+
+# Calculate summary statistics
+OR_df <- oxide_df %>%
+  subset(value > 0) %>%
+  group_by(sample, primary_ion, replicat) %>%
+  reframe(OR = sum(value)) 
+
+summary_df <- OR_df %>% 
+  subset(primary_ion == "Bi5") %>% 
+  group_by(sample) 
+
+# Prepare data for plotting
+plot_df <- oxide_df %>%
+  subset(primary_ion == "Bi5") %>% 
+  subset(value > 0) %>%
+  group_by(sample, oxides) %>%
+  reframe(mean_ratio = mean(value)) %>%
+  inner_join(summary_df %>% 
+    reframe(OR_mean = mean(OR), OR_SE = sd(OR) / sqrt(n())),
+  by = "sample") %>%
+  mutate(sample = fct_reorder(sample, OR_mean, .desc = TRUE))
+  
+
+p <- plot_df %>% 
+  ggplot(aes(x = sample, y = mean_ratio)) + 
+  geom_bar(stat = "identity" , aes(fill = oxides)) + 
+  scale_fill_manual(values=c("#3bc093", "#ffd479", "#e5a273", "#07b5bc", "#e55e57"),
+                    labels = c(expression(IrO[x]), expression(PdO[x]), 
+                               expression(PtO[x]),expression(RhO[x]),expression(RuO[x]))) +
+  scale_x_discrete(labels=c("Ru-Ir" = "Ru-Ir", "Ru-Pd" = "Ru-Pd", "RuPtPd" = "Ru-Pt-Pd",
+                               "RuPtPdIr" = "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh" = "HEA Mix",
+                            "HEA19" = "HEA Seg")) +
+  geom_errorbar(aes(ymin = OR_mean- 1.96*OR_SE, ymax = OR_mean + 1.96*OR_SE), 
+                width = 0.2) +
+  labs(x = NULL, y ="OR", fill = "")  +
+  theme_bw() +
+  theme(legend.position = "top",
+    #panel.grid = element_blank(),
+        legend.text = element_text(size=35),
+        axis.text = element_text(size=20),
+        axis.title.y=element_text(size=30),
+        axis.text.x = element_text(size=30, color = "black", angle = 90, hjust = 1, vjust = 0.5 ),
+        axis.text.y = element_text(size=30, color = "black"),
+        panel.border = element_rect(color = "grey"),
+        panel.background = element_rect(fill='transparent'), #transparent panel bg
+        plot.background = element_rect(fill='transparent', color=NA)
+    )
+p
+pairwise.t.test(summary_df$OR, summary_df$sample, p.adjust.method = "bonferroni", pool.sd = T)
+```
+
+
+```{r MO_x/sum(M) with only one element}
+scaled_automatic_negative_df |> select(matches("^(Pt|Pd|Ir|Rh){1}$")) |> colnames()
+
+anova_df <- scaled_automatic_negative_df |> mutate(
+                        IrO_sum = rowSums(across(matches("^IrO"))),
+                        PdO_sum = rowSums(across(matches("^PdO"))),
+                        PtO_sum = rowSums(across(matches("^PtO"))),
+                        RhO_sum = rowSums(across(matches("^RhO"))),)
+
+str_all_primary_ion <- "^(Ru|Pt|Pd|Ir|Rh){1}$"
+
+# Define colors for each oxide
+oxide_colors <- c("PtO" = "#e5a273", "RhO" = "#07b5bc",
+                  "IrO" = "#3bc093", "PdO" = "#ffd479")
+
+# Define the color palette for the samples
+sample_colors <- c("Ru" = "#e55e57" ,"Ru-Pt" = "#e5a273", "Ru-Pd" = "#ffd479",
+                   "Ru-Ir" = "#3bc093", "Ru-Rh" = "#07b5bc", 
+                   "Ru-Pt-Pd" = "#509bdd", "Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "HEA Mix" = "#b373d0", "HEA Seg" = "#D452AA")
+
+sample_names <- c("Ru" = "Ru", "Ru-Pt" = "Ru-Pt", "Ru-Pd" = "Ru-Pd",
+                  "Ru-Ir" = "Ru-Ir","Ru-Rh" = "Ru-Rh",
+                  "Ru-Pt-Pd" = "Ru-Pt-Pd", 
+                  "Ru-Pt-Pd-Ir" = "Ru-Pt-Pd-Ir", 
+                  "Ru-Pt-Pd-Ir-Rh" = "HEA Mix", 
+                  "HEA19" = "HEA Seg")
+
+# function to create the TEX Ratio
+appender <- function(string){ 
+  M <- substr(string, 1,2)
+    TeX(paste0("$\\bf{OR_{" , M, "}", "}$"))
+}
+
+anova_df <- anova_df |> 
+  mutate(
+    IrO_ratio = IrO_sum/rowSums(across(matches(str_all_primary_ion))),
+    PdO_ratio = PdO_sum/rowSums(across(matches(str_all_primary_ion))),
+    PtO_ratio = PtO_sum/rowSums(across(matches(str_all_primary_ion))),
+    RhO_ratio = RhO_sum/rowSums(across(matches(str_all_primary_ion)))) |>
+  select(sample , primary_ion, contains("ratio"), contains("sum")) |> 
+  pivot_longer(!c(sample, primary_ion), names_to = c("oxides", "fct"),
+                         values_to = "value", names_sep = "_") |> 
+  subset(value != 0 
+         & fct == "ratio"
+         & primary_ion == "Bi5" 
+         & sample %in% c("Ru-Ir","Ru-Pt", "Ru-Pd", "Ru-Pt-Pd", "Ru-Rh",
+                         "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) 
+
+# ---------------- HISTOGRAM
+
+p <- anova_df |> 
+  group_by(sample, oxides) |> 
+  summarise(mean_sum = mean(value), SE = sd(value)/sqrt(n()), .groups = "drop") %>% 
+  mutate(sample = factor(sample, levels = names(sample_names),
+                               labels = sample_names)) %>% 
+  ggplot(aes(x = reorder_within(sample, -mean_sum, oxides, .fun = "sum") , 
+             fill = sample,
+             y = mean_sum,)) + 
+  geom_bar(stat = "identity") + 
+  geom_errorbar(aes(ymin = mean_sum- 1.96*SE, ymax = mean_sum + 1.96*SE), 
+                width = 0.2)+
+  labs( y = NULL, fill = "") +
+  scale_fill_manual(values = sample_colors) +
+  scale_x_reordered() +
+  facet_wrap(~oxides, scales = "free",
+             labeller = as_labeller(appender, 
+                            default = label_parsed)) + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(size=25, color = "black", angle = 45,
+                                   hjust = 1, vjust = 1 , face = "plain"),
+        axis.text.y = element_text(size = 25),
+        strip.text.x = element_text(size=25, face="bold"),
+        panel.border = element_rect(color = "#666666")) 
+  
+  
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-t', g$layout$name))
+  fills <- oxide_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+axis_text_color <- function(plot, col = "fill") {
+  c <- ggplot_build(plot)$data[[1]]
+  plot +
+    theme(axis.text.x = element_text(colour = c[[col]]))
+}
+
+axis_text_color(p)
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+
+#--------------- Pairwise Test 
+# Function to perform pairwise t-test for each oxide
+pairwise_test <- function(df) {
+  test <- pairwise.t.test(df$value, df$sample, p.adjust.method = "none", pool.sd = F) %>% 
+    tidy(test) %>% mutate(significant = ifelse(p.value < 0.05, "*", "ns"))
+}
+
+# Perform pairwise t-tests for each oxide group
+results <- anova_df %>%
+  group_by(oxides) %>%
+  nest() %>%
+  mutate(pairwise_results = map(data, pairwise_test))
+
+# Extract and print the results
+results <- results %>%
+  select(oxides, pairwise_results) %>% 
+  unnest(pairwise_results) %>%
+  print(n = Inf)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+
+# Sample Data Preparation
+anova_df <- scaled_automatic_negative_df |> 
+  mutate(
+    RuO_sum = rowSums(across(matches("^RuO"))),
+    IrO_sum = rowSums(across(matches("^IrO"))),
+    PdO_sum = rowSums(across(matches("^PdO"))),
+    PtO_sum = rowSums(across(matches("^PtO"))),
+    RhO_sum = rowSums(across(matches("^RhO")))
+  )
+
+str_all_primary_ion <- "^(Ru|Pt|Pd|Ir|Rh){1,}$"
+
+anova_df <- anova_df |> 
+  mutate(
+    RuO_ratio = RuO_sum/rowSums(across(matches(str_all_primary_ion))),
+    IrO_ratio = IrO_sum/rowSums(across(matches(str_all_primary_ion))),
+    PdO_ratio = PdO_sum/rowSums(across(matches(str_all_primary_ion))),
+    PtO_ratio = PtO_sum/rowSums(across(matches(str_all_primary_ion))),
+    RhO_ratio = RhO_sum/rowSums(across(matches(str_all_primary_ion)))
+  ) |> 
+  select(sample, primary_ion, contains("ratio"), contains("sum"))
+
+# Pivot and filter the data
+plot_data <- anova_df |> 
+  pivot_longer(!c(sample, primary_ion), names_to = c("oxides", "fct"),
+               values_to = "value", names_sep = "_") |> 
+  subset(value != 0 
+         & fct == "ratio"
+         & primary_ion == "Bi5" 
+         & sample %in% c("Ru-Ir", "Ru-Pt", "Ru-Pd", "Ru-Pt-Pd", "Ru-Rh",
+                         "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) |> 
+  group_by(sample, oxides) |> 
+  summarise(mean_sum = mean(value), .groups = "drop") |> 
+  mutate(sample = fct_reorder(sample, mean_sum, .fun = "sum", .desc = TRUE, .na_rm = TRUE))
+
+# Define colors for each oxide
+oxide_colors <- c("RuO" = "#07b5bc", "PdO" = "#ffd479", "PtO" = "#e5a273", "IrO" = "#ff6f61", "RhO" = "#9c27b0")
+
+# Create the plot
+plot <- plot_data |> 
+  ggplot(aes(x = sample, fill = oxides, y = mean_sum)) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_manual(values = oxide_colors,
+                    labels = c(expression(RuO), expression(PdO), expression(PtO), expression(IrO), expression(RhO))) +
+  labs(x = NULL, y = "OR", fill = "") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    legend.text = element_text(size = 35),
+    legend.title = element_text(size = 20),
+    axis.title = element_text(size = 30), 
+    axis.text.x = element_text(size = 30, color = "black", angle = 90, hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(size = 30, color = "black"),
+    panel.border = element_rect(color = "#666666")
+  ) 
+
+# Draw the plot
+print(plot)
+```
+
+
+
+```{r Ru expression across samples}
+p <- scaled_automatic_positive_df %>% 
+  subset(primary_ion == "Bi5" & sample %in% c("Ru-Ir", "Ru-Pd", "Ru-Pt", "Ru-Rh")) %>% 
+  ggplot(aes(x = 1, y = Ru)) +
+  geom_point(aes(color = sample), size = 5) +
+  scale_color_manual(values = c("#e5a273", "#ffd479", "#3bc093", "#07b5bc")) +
+  stat_summary(geom = "point",fun = "mean", size = 6, fill = "red", color = "red",
+              shape = 23) +
+  facet_wrap(~sample, strip.position = "bottom", nrow = 1) +
+  labs(y = bquote("Normalized"~Ru^"")) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y=element_text(size=25),
+        axis.text.y=element_text(size=20),
+        legend.position = "none", 
+        strip.text.x = element_text(size=25,face="bold"),
+        panel.grid.minor = element_blank())
+
+# Define the color palette for the samples
+sample_colors <- c("Ru-Pt" = "#e5a273", "Ru-Pd" = "#ffd479", 
+                   "Ru-Rh" = "#3bc093", "Ru-Ir" = "#07b5bc")
+
+# Function to get the strip background colors
+strip_background_fill <- function(p) {
+  g <- ggplot_gtable(ggplot_build(p))
+  stripr <- which(grepl('strip-b', g$layout$name))
+  fills <- sample_colors
+  
+  k <- 1
+  for (i in stripr) {
+    j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+    g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+    k <- k + 1
+  }
+  return(g)
+}
+
+g <- strip_background_fill(p)
+
+# Draw the plot
+grid::grid.draw(g)
+```
+
+# Evolution of intensity with mz 
+```{r}
+library(scales)
+big_df <- read.csv("8sample_automatic_positive3_data.csv")
+big_df$replicat <- as.factor(big_df$replicat)
+big_df$sample <- factor(big_df$sample_name,
+                                       levels = c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir",
+                                                  "Ru-Rh", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir",
+                                                  "Ru-Pt-Pd-Ir-Rh", "HEA19", "HEA_1.2"))
+big_df <- big_df %>% 
+  mutate("total_count" = rowSums(across(where(is.numeric))))
+
+scaled_big_df <- big_df %>% mutate(across(where(is.numeric) &!total_count,  ~ .x/total_count))
+
+big_df %>% select(sample, primary_ion, matches("^Ru\\d?$")) %>% 
+  subset(sample %in% c("Ru" ,"Ru-Pt", "Ru-Pd", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19") )%>% 
+  mutate(across(matches("Ru\\d?"),~.x/Ru)) %>% 
+  group_by(sample) %>% 
+  summarise(across(where(is.numeric), mean)) %>% 
+  pivot_longer(!c(sample), names_to = "Ru_cluster") %>% 
+  ggplot(aes(x = Ru_cluster, y = value, color = sample)) + 
+  geom_point() +
+  geom_line(aes(group = sample)) +
+  scale_y_continuous(trans='log10', labels = scientific)
+  
+  
+```
+
+# Plot of OR and CR fo all sample
+
+```{r}
+CR_OR_df <- left_join(CR_df, OR_df, by = c("sample", "primary_ion", "replicat"))
+
+sample_colors <- c("Ru" = "#e55e57" ,"Ru-Pt" = "#e5a273", "Ru-Pd" = "#ffd479",
+                   "Ru-Ir" = "#3bc093", "Ru-Rh" = "#07b5bc", 
+                   "Ru-Pt-Pd" = "#509bdd", "Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "Ru-Pt-Pd-Ir-Rh" = "#b373d0", "HEA19" = "#D452AA")
+p <- CR_OR_df %>% 
+  subset(primary_ion == "Bi5") %>% 
+  ggplot(aes(x = CR, y = OR, color = sample)) + 
+  geom_point(size = 4) + 
+  scale_color_manual(values = sample_colors) +
+  theme(
+        panel.grid = element_blank(),
+        axis.title.x  = element_text(size = 40),
+        axis.title.y  = element_text(size = 40),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_line(linewidth = 2),
+        panel.border = element_blank(),
+        legend.position = "none", 
+        panel.background = element_rect(fill='transparent'), #transparent panel bg
+        plot.background = element_rect(fill='transparent', color=NA)) 
+
+# Adding a rectangle annotation
+p <- p + geom_rect(aes(xmin = 0.4, xmax = 0.9, ymin = 35, ymax = 49),
+                   linetype = "solid", color = sample_colors["Ru-Ir"], linewidth = 0.6,
+                   fill = sample_colors["Ru-Ir"], alpha = 0.005) +
+  
+  geom_rect(aes(xmin = -0.1, xmax = 0.1, ymin = 22, ymax = 31),
+                   linetype = "solid", color = sample_colors["Ru"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru"], alpha = 0.005) +
+  
+  geom_rect(aes(xmin = 0.5, xmax = 1.25, ymin = 25, ymax = 31.5),
+                   linetype = "solid", color = sample_colors["Ru-Rh"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Rh"], alpha = 0.005) + 
+  
+  geom_rect(aes(xmin = 0.13, xmax = 0.52, ymin = 12, ymax = 19),
+                   linetype = "solid", color = sample_colors["Ru-Pd"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Pd"], alpha = 0.005) + 
+  
+  geom_rect(aes(xmin = 0.53, xmax = 1.43, ymin = 5, ymax = 19),
+                   linetype = "solid", color = sample_colors["Ru-Pt"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Pt"], alpha = 0.006) +
+  
+  geom_rect(aes(xmin = 1.23, xmax = 1.6, ymin = 6, ymax = 9.5),
+                   linetype = "solid", color = sample_colors["Ru-Pt-Pd"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Pt-Pd"], alpha = 0.009) + 
+  
+  geom_rect(aes(xmin = 1.61, xmax = 2.4,  ymin = 8, ymax = 13),
+                   linetype = "solid", color = sample_colors["Ru-Pt-Pd-Ir"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Pt-Pd-Ir"], alpha = 0.008) + 
+  
+  geom_rect(aes(xmin = 2.75, xmax = 3.7, ymin = 5.5, ymax = 9),
+                   linetype = "solid", color = sample_colors["HEA19"], linewidth = 0.6 ,
+                   fill = sample_colors["HEA19"], alpha = 0.005) + 
+  
+  geom_rect(aes(xmin = 3.5, xmax = 4.9, ymin = 5.5, ymax = 8),
+                   linetype = "solid", color = sample_colors["Ru-Pt-Pd-Ir-Rh"], linewidth = 0.6 ,
+                   fill = sample_colors["Ru-Pt-Pd-Ir-Rh"], alpha = 0.005)
+  
+
+  # Adding an arrow pointing to the rectangle with a label
+#p <- p + annotate("segment", x = 3, xend = 1.5, y = 45, yend = 35, 
+#                  arrow = arrow(type = "closed", length = unit(0.2, "inches")), 
+#                  color = "red") +
+#         annotate("text", x = 3.2, y = 45, label = "Key Area", 
+#                  hjust = 0, color = "red", size = 5) 
+p
+```
+
