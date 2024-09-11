@@ -1,8 +1,27 @@
+"""
+
+"""
+
+
+# =======================================================
+#  - PACKAGES IMPORT
+# =======================================================
+
+from utilities.molecule import Molecule, Element
+from utilities.periodic_table import get_periodic_table
+from utilities.SIMS_Spectra_class import SIMS_Spectra
+from matplotlib.patches import FancyArrowPatch
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator, ScalarFormatter)
+
+
 # =======================================================
 #  - COMBINED SPECTRA PLOT
 # =======================================================
 
-from matplotlib.patches import FancyArrowPatch
 isotope_df = pd.DataFrame({"bin_mz": np.arange(95, 110.5, 0.5)})
 
 df_list = [
@@ -105,6 +124,11 @@ fig.patches.append(arrow)
 
 plt.subplots_adjust(hspace=0.0)
 plt.savefig("data/figures/combined_spectra.png", dpi=700, bbox_inches='tight')
+
+
+# =======================================================
+#  - QUANTIFICATION PLOT
+# =======================================================
 
 
 # =======================================================
