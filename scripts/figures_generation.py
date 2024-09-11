@@ -2,7 +2,7 @@
 File: figure_generation.py
 Author: Oscar Laurent
 Date: 2024-09-11
-Description: A Python script to perform generate all used in the figure in the article and in the supplementary information
+Description: A Python script to perform generate the signal processing figure in the article and in the supplementary information
 """
 
 from utilities.molecule import Molecule, Element
