@@ -23,3 +23,39 @@ theme_set(theme_bw() +
         axis.title.y=element_text(size=14),
         axis.text.x=element_text(size=13,face="bold"),
         strip.text.x = element_text(size=13,face="bold")))
+
+
+
+# =======================================================
+#  - DATA RETRIEVAL
+# =======================================================
+
+automatic_positive_df <- read.csv("data/ToF-SIMS_data/processed_spectra/AllSample_PositiveMode_ProcessedData.csv")
+automatic_positive_df$replicat <- as.factor(automatic_positive_df$replicat)
+automatic_positive_df$sample <- factor(automatic_positive_df$sample_name,
+                                       levels = c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir",
+                                                  "Ru-Rh", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir",
+                                                  "Ru-Pt-Pd-Ir-Rh", "HEA19", "HEA_1.2"))
+metadata_positive <- automatic_positive_df %>% select(!where(is.numeric))
+
+# Scaling the spectra by their total counts
+automatic_positive_df <- automatic_positive_df %>% 
+  mutate("total_count" = rowSums(across(where(is.numeric))))
+
+scaled_automatic_positive_df <- automatic_positive_df %>% mutate(across(where(is.numeric) &!total_count,  ~ .x/total_count))
+
+automatic_negative_df <- read.csv("data/ToF-SIMS_data/processed_spectra/AllSample_NegativeMode_ProcessedData.csv")
+automatic_negative_df$replicat <- as.factor(automatic_negative_df$replicat)
+automatic_negative_df$sample <- factor(automatic_negative_df$sample_name,
+                                       levels = c("Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir",
+                                                  "Ru-Rh", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir",
+                                                  "Ru-Pt-Pd-Ir-Rh", "HEA19", "HEA_1.2"))
+metadata_negative <- automatic_negative_df %>% select(!where(is.numeric))
+
+# Scaling the spectra by their total counts
+automatic_negative_df <- automatic_negative_df %>% 
+  mutate("total_count" = rowSums(across(where(is.numeric))))
+
+scaled_automatic_negative_df <- automatic_negative_df %>% mutate(across(where(is.numeric) &!total_count,  ~ .x/total_count))
+
+
