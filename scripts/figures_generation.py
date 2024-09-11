@@ -2,7 +2,7 @@
 File: figure_generation.py
 Author: Oscar Laurent
 Date: 2024-09-11
-Description: A Python script to generate the peaks decomposition figures in the article and in the supplementary information
+Description: A Python script to generate the figures on the peaks decomposition process used in the article and in the supplementary information
 """
 
 from utilities.molecule import Molecule, Element
