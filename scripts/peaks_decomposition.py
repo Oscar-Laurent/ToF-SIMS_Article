@@ -2,7 +2,7 @@
 File: peaks_decomposition.py
 Author: Oscar Laurent
 Date: 2024-09-11
-Description: A Python script to perform the peaks decomposition of raw ToF-SIMS spectra into a cvs file
+Description: A Python script to perform the peaks decomposition of raw ToF-SIMS spectra into 2 DataFrames : one for the positive data and one for the negative data
 """
 
 # ===================================================================
@@ -156,4 +156,4 @@ df_all.fillna(0, inplace=True)
 
 # Remove Columns where the quantification value is 0 for all the samples
 df_all_cleaned = df_all.loc[:,(df_all !=0).any().values]
-#df_all_cleaned.to_csv("data/ToF-SIMS_data/processed_data/AllSample_NegativeMode_ProcessedData.csv", index=False)
+df_all_cleaned.to_csv("data/ToF-SIMS_data/processed_data/AllSample_NegativeMode_ProcessedData.csv", index=False)
