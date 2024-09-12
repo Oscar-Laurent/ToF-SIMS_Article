@@ -3,6 +3,9 @@
 This repository contains the data, scripts, and supplementary materials for the article titled **“High entropy alloys: assessing atomic-scale mixing and surface passivation with time-of-flight secondary ion mass spectrometry.”**
 ![image](https://github.com/user-attachments/assets/d884f7ee-d3bc-4f6d-a611-c4a3be7295eb)
 
+## Repository Structure
+
+The repository is organized as follows:
 ```
 ToF-SIMS_Article/
 │
@@ -29,3 +32,10 @@ To process the raw data and generate figures, use the scripts provided in the `s
 1.	Loading the data from the data/ directory.
 2.	Running the respective scripts for preprocessing (data_processing.R) and analysis (e.g., peaks_decomposition.py).
 3.	Generating figures using the figures_generation.py script.
+
+## Contact 
+For any questions or collaborations, please feel free to reach out to the authors:
+
+* Oscar Laurent (UCLouvain) – oscar.laurent@uclouvain.be
+* Arnaud Delcorte (UCLouvain) – arnaud.delcorte@uclouvain.be
+* Damien P. Debecker (UCLouvain) – damien.debecker@uclouvain.be
