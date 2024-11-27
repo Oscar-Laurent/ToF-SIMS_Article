@@ -15,7 +15,6 @@ from tqdm import tqdm
 import re
 from scipy.optimize import nnls
 import sys 
-from .nnls_admm import nnls_admm
 
 @dataclass
 class SIMS_Spectra: 
