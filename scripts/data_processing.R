@@ -580,3 +580,22 @@ results <- results %>%
   select(oxides, pairwise_results) %>% 
   unnest(pairwise_results) %>%
   print(n = Inf)
+
+
+# =========================================================
+#  - Reviewer Comments: Plot of differents oxidation states
+# =========================================================
+
+scaled_automatic_negative_df %>% 
+  subset(primary_ion == "Bi5" &
+  sample %in% c("Ru-Pd", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>%
+  select(sample, Pt, matches("^PdO\\d?$")) %>% # Change here the Oxide Spicies that you want to analyse
+  group_by(sample) %>% 
+  summarise(across(where(is.numeric), mean)) %>%
+  pivot_longer(!c(sample), names_to = "Pd_oxide") %>% 
+  ggplot(aes(x = sample, y = value, color = Pd_oxide, group = Pd_oxide)) +
+  geom_point() + 
+  geom_line() + 
+  ylab("Scaled Intensities") + 
+  theme(legend.title = element_blank(), 
+        legend.text = element_text(size=14, face = "bold")) 
