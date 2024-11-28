@@ -591,10 +591,14 @@ scaled_automatic_negative_df %>%
   sample %in% c("Ru-Pd", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>%
   select(sample, Pt, matches("^PdO\\d?$")) %>% # Change here the Oxide Spicies that you want to analyse
   group_by(sample) %>% 
-  summarise(across(where(is.numeric), mean)) %>%
-  pivot_longer(!c(sample), names_to = "Pd_oxide") %>% 
-  ggplot(aes(x = sample, y = value, color = Pd_oxide, group = Pd_oxide)) +
+  summarise(across(where(is.numeric), 
+                   list(mean=~mean(.x),
+                        se = ~sd(.x)/sqrt(n())))) %>% 
+  pivot_longer(!c(sample), names_sep = "_", names_to = c("oxide", "metric")) %>%
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  ggplot(aes(x = sample, y = mean, color = oxide, group = oxide)) +
   geom_point() + 
+  geom_errorbar(aes(ymin = mean - 1.96*se, ymax = mean + 1.96*se), width = 0.15) +
   geom_line() + 
   ylab("Scaled Intensities") + 
   theme(legend.title = element_blank(), 
