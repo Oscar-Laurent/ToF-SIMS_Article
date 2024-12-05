@@ -582,14 +582,20 @@ results <- results %>%
   print(n = Inf)
 
 
+
 # =========================================================
 #  - Reviewer Comments: Plot of differents oxidation states
 # =========================================================
 
+sample_colors <- c( "Ru-Pd" = "#ffd479",
+                   "Ru-Pt-Pd" = "#509bdd", "Ru-Pt-Pd-Ir" = "#8d85e5", 
+                   "HEA Mix" = "#b373d0", "HEA Seg" = "#D452AA")
+
+
 scaled_automatic_negative_df %>% 
   subset(primary_ion == "Bi5" &
   sample %in% c("Ru-Pd", "Ru-Pt-Pd", "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh", "HEA19")) %>%
-  select(sample, Pt, matches("^PdO\\d?$")) %>% # Change here the Oxide Spicies that you want to analyse
+  select(sample, Pt, matches("^PdO\\d?$")) %>% 
   group_by(sample) %>% 
   summarise(across(where(is.numeric), 
                    list(mean=~mean(.x),
@@ -600,6 +606,10 @@ scaled_automatic_negative_df %>%
   geom_point() + 
   geom_errorbar(aes(ymin = mean - 1.96*se, ymax = mean + 1.96*se), width = 0.15) +
   geom_line() + 
+  scale_x_discrete(labels=c("Ru-Pd" = "Ru-Pd", "RuPtPd" = "Ru-Pt-Pd",
+                               "RuPtPdIr" = "Ru-Pt-Pd-Ir", "Ru-Pt-Pd-Ir-Rh" = "HEA Mix",
+                            "HEA19" = "HEA Seg"))+
   ylab("Scaled Intensities") + 
-  theme(legend.title = element_blank(), 
-        legend.text = element_text(size=14, face = "bold")) 
+  theme(legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=14, face = "bold"),
+        axis.text.x = element_text(size = 14, angle = 45, hjust = 1, color = sample_colors, face = "bold"))
