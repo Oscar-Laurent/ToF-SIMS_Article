@@ -361,7 +361,7 @@ plt.savefig("data/supplementary_material/binned_spectrum", dpi=500, bbox_inches=
 
 
 # =======================================================
-#  - REVIEWERS COMMENTS : INTERMEDIATE M/Z RANGE PLOT
+#  - INTERMEDIATE M/Z RANGE PLOT
 # =======================================================
 
 single_element = ["H", "K", "Na", "Cu", "Zn", "Al", "CH3", "C2H5"]
