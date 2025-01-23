@@ -78,6 +78,12 @@ new_data = pd.DataFrame(0, index=new_index, columns=['Intensity'])
 HCP_Ru = pd.concat([new_data, HCP_Ru])
 HCP_Ru = HCP_Ru[HCP_Ru.index <=90]
 
+samples = [RuRu, RuPt, RuPd, RuIr, RuRh, RuPdPt, RuPdPtIr, HEA19,  RuPdPtIrRh]
+phases = [FCC_Ir, FCC_Pd, FCC_Pt, FCC_Rh, FCC_Ru]
+sample_names = ["Ru", "Ru-Pt", "Ru-Pd", "Ru-Ir", "Ru-Rh", "Ru-Pd-Pt", "Ru-Pd-Pt-Ir", "HEA Seg","HEA Mix"]
+sample_colors = ["#e55e57", "#e5a273", "#ffd479", "#3bc093", "#07b5bc", "#509bdd", "#8d85e5", "#b373d0", "#d073b8"]
+intensity_at_81 = [ 0.5, 0.75, 0.5, 0.5, 0.5, 0.7, 0.7, 0.75, 0.35]
+
 # Set style and figure size
 plt.style.use("default")
 fig = plt.figure(figsize=(7, 10))
