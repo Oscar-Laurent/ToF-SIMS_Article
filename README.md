@@ -1,7 +1,7 @@
 # ToF-SIMS Article: High Entropy Alloys
 
-This repository contains the data, scripts, and supplementary materials for the article titled :
-> ### **“High entropy alloys: assessing atomic-scale mixing and surface passivation with time-of-flight secondary ion mass spectrometry.”**
+This repository contains the data, scripts, and supplementary materials from:
+> ### Laurent, O.F., De Marco, M., Faustini, M., Boissière, C., Poleunis, C., Delcorte, A. and Debecker, D.P., 2024. High-Entropy Alloys: Assessing Atomic-Scale Mixing and Surface Passivation with Time-of-Flight Secondary Ion Mass Spectrometry. Analytical Chemistry.
 
 ![image](https://github.com/user-attachments/assets/d884f7ee-d3bc-4f6d-a611-c4a3be7295eb)
 
