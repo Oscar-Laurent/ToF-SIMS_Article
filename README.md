@@ -33,7 +33,7 @@ To process the raw data and generate figures, use the scripts provided in the `s
 3.	Generating figures using the figures_generation.py script.
 
 ## License & Citation
-This repository is made available under the [MIT Licence](LICENCE.md).
+This repository is made available under the [MIT License](LICENSE).
 If you use these data in your research, please cite the article as follows:
 > "Laurent, Oscar F., et al. "High-Entropy Alloys: Assessing Atomic-Scale Mixing and Surface Passivation with Time-of-Flight Secondary Ion Mass Spectrometry." Analytical Chemistry (2024)."
 
